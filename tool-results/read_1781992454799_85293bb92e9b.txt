@@ -1,0 +1,1179 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback } from 'react'
+     4→import { Button } from '@/components/ui/button'
+     5→import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+     6→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+     7→import { Textarea } from '@/components/ui/textarea'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Badge } from '@/components/ui/badge'
+    11→
+    12→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    13→import { Switch } from '@/components/ui/switch'
+    14→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+    15→import {
+    16→  Briefcase, Search, FileText, Bell, Settings, Upload,
+    17→  MapPin, DollarSign, Clock, ExternalLink, Bookmark,
+    18→  Loader2, Sparkles, Trash2,
+    19→  Building2, GraduationCap,
+    20→  FileBadge, Filter
+    21→} from 'lucide-react'
+    22→import { useToast } from '@/hooks/use-toast'
+    23→
+    24→// ============ Types ============
+    25→interface ParsedProfile {
+    26→  name: string | null
+    27→  email: string | null
+    28→  title: string | null
+    29→  summary: string | null
+    30→  skills: string[]
+    31→  experience: Array<{ title: string; company: string; duration: string }>
+    32→  education: Array<{ degree: string; school: string; year: string }>
+    33→}
+    34→
+    35→interface Job {
+    36→  title: string
+    37→  company: string
+    38→  location: string | null
+    39→  description: string | null
+    40→  url: string | null
+    41→  source: string | null
+    42→  salary: string | null
+    43→  jobType: string | null
+    44→  postedDate: string | null
+    45→  matchScore?: number
+    46→}
+    47→
+    48→interface SavedJob {
+    49→  id: string
+    50→  title: string
+    51→  company: string
+    52→  location: string | null
+    53→  description: string | null
+    54→  url: string | null
+    55→  source: string | null
+    56→  salary: string | null
+    57→  jobType: string | null
+    58→  matchScore: number | null
+    59→  postedDate: string | null
+    60→  status: string
+    61→  notes: string | null
+    62→  coverLetter: string | null
+    63→  appliedDate: string | null
+    64→  createdAt: string
+    65→}
+    66→
+    67→interface Notification {
+    68→  id: string
+    69→  title: string
+    70→  message: string
+    71→  type: string
+    72→  read: boolean
+    73→  jobId: string | null
+    74→  createdAt: string
+    75→}
+    76→
+    77→interface Preferences {
+    78→  jobTitles: string[]
+    79→  locations: string[]
+    80→  remoteOnly: boolean
+    81→  salaryMin: number | null
+    82→  jobTypes: string[]
+    83→}
+    84→
+    85→// ============ Main App ============
+    86→export default function Home() {
+    87→  const { toast } = useToast()
+    88→  const [activeTab, setActiveTab] = useState('resume')
+    89→  const [loading, setLoading] = useState<string | null>(null)
+    90→
+    91→  // Resume state
+    92→  const [resumeText, setResumeText] = useState('')
+    93→  const [profile, setProfile] = useState<ParsedProfile | null>(null)
+    94→  const [profileId, setProfileId] = useState<string | null>(null)
+    95→
+    96→  // Jobs state
+    97→  const [searchQuery, setSearchQuery] = useState('data analyst data science')
+    98→  const [searchLocation, setSearchLocation] = useState('')
+    99→  const [searchJobType, setSearchJobType] = useState('')
+   100→  const [searchResults, setSearchResults] = useState<Job[]>([])
+   101→  const [savedJobs, setSavedJobs] = useState<SavedJob[]>([])
+   102→  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set())
+   103→
+   104→  // Applications state
+   105→  const [applicationFilter, setApplicationFilter] = useState('all')
+   106→
+   107→  // Notifications state
+   108→  const [notifications, setNotifications] = useState<Notification[]>([])
+   109→  const [showNotifications, setShowNotifications] = useState(false)
+   110→
+   111→  // Preferences state
+   112→  const [preferences, setPreferences] = useState<Preferences>({
+   113→    jobTitles: ['Data Analyst', 'Data Scientist', 'Business Analyst'],
+   114→    locations: [],
+   115→    remoteOnly: false,
+   116→    salaryMin: null,
+   117→    jobTypes: ['Full-time']
+   118→  })
+   119→
+   120→  // Cover letter dialog
+   121→  const [coverLetterJob, setCoverLetterJob] = useState<SavedJob | null>(null)
+   122→  const [generatedCoverLetter, setGeneratedCoverLetter] = useState('')
+   123→  const [showCoverLetter, setShowCoverLetter] = useState(false)
+   124→
+   125→  // Job detail dialog
+   126→  const [selectedJob, setSelectedJob] = useState<SavedJob | null>(null)
+   127→  const [showJobDetail, setShowJobDetail] = useState(false)
+   128→
+   129→  // Fetch initial data
+   130→  useEffect(() => {
+   131→    loadProfile()
+   132→    loadSavedJobs()
+   133→    loadNotifications()
+   134→    loadPreferences()
+   135→  }, [])
+   136→
+   137→  const loadProfile = async () => {
+   138→    try {
+   139→      const res = await fetch('/api/profile')
+   140→      if (res.ok) {
+   141→        const json = await res.json()
+   142→        const data = json.profile
+   143→        if (data) {
+   144→          setProfileId(data.id)
+   145→          setResumeText(data.resumeText || '')
+   146→          if (data.extractedSkills || data.experience || data.education) {
+   147→            setProfile({
+   148→              name: data.name,
+   149→              email: data.email,
+   150→              title: data.title,
+   151→              summary: data.summary,
+   152→              skills: data.extractedSkills || [],
+   153→              experience: data.experience || [],
+   154→              education: data.education || [],
+   155→            })
+   156→          }
+   157→        }
+   158→      }
+   159→    } catch (e) {
+   160→      console.error('Failed to load profile', e)
+   161→    }
+   162→  }
+   163→
+   164→  const loadSavedJobs = async () => {
+   165→    try {
+   166→      const res = await fetch('/api/jobs/saved')
+   167→      if (res.ok) {
+   168→        const json = await res.json()
+   169→        const data = json.savedJobs || []
+   170→        setSavedJobs(data)
+   171→        const ids = new Set(data.map((j: SavedJob) => `${j.title}-${j.company}`))
+   172→        setSavedJobIds(ids)
+   173→      }
+   174→    } catch (e) {
+   175→      console.error('Failed to load saved jobs', e)
+   176→    }
+   177→  }
+   178→
+   179→  const loadNotifications = async () => {
+   180→    try {
+   181→      const res = await fetch('/api/notifications')
+   182→      if (res.ok) {
+   183→        const json = await res.json()
+   184→        setNotifications(json.notifications || [])
+   185→      }
+   186→    } catch (e) {
+   187→      console.error('Failed to load notifications', e)
+   188→    }
+   189→  }
+   190→
+   191→  const loadPreferences = async () => {
+   192→    try {
+   193→      const res = await fetch('/api/preferences')
+   194→      if (res.ok) {
+   195→        const json = await res.json()
+   196→        const data = json.preference
+   197→        if (data) {
+   198→          setPreferences({
+   199→            jobTitles: data.jobTitles || ['Data Analyst', 'Data Scientist'],
+   200→            locations: data.locations || [],
+   201→            remoteOnly: data.remoteOnly || false,
+   202→            salaryMin: data.salaryMin || null,
+   203→            jobTypes: data.jobTypes || ['Full-time'],
+   204→          })
+   205→        }
+   206→      }
+   207→    } catch (e) {
+   208→      console.error('Failed to load preferences', e)
+   209→    }
+   210→  }
+   211→
+   212→  // Parse resume
+   213→  const handleParseResume = async () => {
+   214→    if (!resumeText.trim()) {
+   215→      toast({ title: 'Error', description: 'Please paste your resume text first', variant: 'destructive' })
+   216→      return
+   217→    }
+   218→    setLoading('parsing')
+   219→    try {
+   220→      // First save the profile
+   221→      await fetch('/api/profile', {
+   222→        method: 'POST',
+   223→        headers: { 'Content-Type': 'application/json' },
+   224→        body: JSON.stringify({ resumeText }),
+   225→      })
+   226→      // Then parse it
+   227→      const res = await fetch('/api/profile/parse', {
+   228→        method: 'POST',
+   229→        headers: { 'Content-Type': 'application/json' },
+   230→        body: JSON.stringify({ resumeText }),
+   231→      })
+   232→      if (res.ok) {
+   233→        const json = await res.json()
+   234→        const data = json.parsed || json.profile
+   235→        setProfile(data)
+   236→        toast({ title: 'Resume Parsed!', description: `Found ${data?.skills?.length || 0} skills` })
+   237→      } else {
+   238→        const err = await res.json()
+   239→        toast({ title: 'Parse Failed', description: err.error || 'Could not parse resume', variant: 'destructive' })
+   240→      }
+   241→    } catch (e) {
+   242→      toast({ title: 'Error', description: 'Failed to parse resume', variant: 'destructive' })
+   243→    } finally {
+   244→      setLoading(null)
+   245→    }
+   246→  }
+   247→
+   248→  // Search jobs
+   249→  const handleSearchJobs = async () => {
+   250→    setLoading('searching')
+   251→    try {
+   252→      const res = await fetch('/api/jobs/search', {
+   253→        method: 'POST',
+   254→        headers: { 'Content-Type': 'application/json' },
+   255→        body: JSON.stringify({
+   256→          query: searchQuery,
+   257→          location: searchLocation,
+   258→          jobType: searchJobType,
+   259→          numResults: 15,
+   260→        }),
+   261→      })
+   262→      if (res.ok) {
+   263→        const json = await res.json()
+   264→        const data = json.jobs || []
+   265→        setSearchResults(data)
+   266→        toast({ title: 'Jobs Found!', description: `${data.length} jobs matched your search` })
+   267→      } else {
+   268→        const err = await res.json()
+   269→        toast({ title: 'Search Failed', description: err.error || 'Could not search jobs', variant: 'destructive' })
+   270→      }
+   271→    } catch (e) {
+   272→      toast({ title: 'Error', description: 'Failed to search jobs', variant: 'destructive' })
+   273→    } finally {
+   274→      setLoading(null)
+   275→    }
+   276→  }
+   277→
+   278→  // Save a job
+   279→  const handleSaveJob = async (job: Job) => {
+   280→    try {
+   281→      const res = await fetch('/api/jobs/saved', {
+   282→        method: 'POST',
+   283→        headers: { 'Content-Type': 'application/json' },
+   284→        body: JSON.stringify({
+   285→          ...job,
+   286→          matchScore: job.matchScore || null,
+   287→        }),
+   288→      })
+   289→      if (res.ok) {
+   290→        await loadSavedJobs()
+   291→        await loadNotifications()
+   292→        toast({ title: 'Job Saved!', description: `${job.title} at ${job.company}` })
+   293→      }
+   294→    } catch (e) {
+   295→      toast({ title: 'Error', description: 'Failed to save job', variant: 'destructive' })
+   296→    }
+   297→  }
+   298→
+   299→  // Delete a saved job
+   300→  const handleDeleteJob = async (id: string) => {
+   301→    try {
+   302→      const res = await fetch(`/api/jobs/saved/${id}`, { method: 'DELETE' })
+   303→      if (res.ok) {
+   304→        await loadSavedJobs()
+   305→        toast({ title: 'Job Removed', description: 'Job has been removed from your list' })
+   306→      }
+   307→    } catch (e) {
+   308→      toast({ title: 'Error', description: 'Failed to remove job', variant: 'destructive' })
+   309→    }
+   310→  }
+   311→
+   312→  // Update job status
+   313→  const handleUpdateStatus = async (id: string, status: string) => {
+   314→    try {
+   315→      const res = await fetch(`/api/jobs/saved/${id}`, {
+   316→        method: 'PATCH',
+   317→        headers: { 'Content-Type': 'application/json' },
+   318→        body: JSON.stringify({ status, appliedDate: status === 'applied' ? new Date().toISOString() : undefined }),
+   319→      })
+   320→      if (res.ok) {
+   321→        await loadSavedJobs()
+   322→        await loadNotifications()
+   323→        toast({ title: 'Status Updated', description: `Job marked as ${status}` })
+   324→      }
+   325→    } catch (e) {
+   326→      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+   327→    }
+   328→  }
+   329→
+   330→  // Generate cover letter
+   331→  const handleGenerateCoverLetter = async (job: SavedJob) => {
+   332→    setCoverLetterJob(job)
+   333→    setLoading('coverLetter')
+   334→    setShowCoverLetter(true)
+   335→    setGeneratedCoverLetter('')
+   336→    try {
+   337→      const res = await fetch('/api/cover-letter', {
+   338→        method: 'POST',
+   339→        headers: { 'Content-Type': 'application/json' },
+   340→        body: JSON.stringify({
+   341→          jobId: job.id,
+   342→          resumeText,
+   343→          jobTitle: job.title,
+   344→          company: job.company,
+   345→          jobDescription: job.description,
+   346→        }),
+   347→      })
+   348→      if (res.ok) {
+   349→        const data = await res.json()
+   350→        setGeneratedCoverLetter(data.coverLetter)
+   351→        await loadSavedJobs()
+   352→      } else {
+   353→        const err = await res.json()
+   354→        toast({ title: 'Generation Failed', description: err.error || 'Could not generate cover letter', variant: 'destructive' })
+   355→      }
+   356→    } catch (e) {
+   357→      toast({ title: 'Error', description: 'Failed to generate cover letter', variant: 'destructive' })
+   358→    } finally {
+   359→      setLoading(null)
+   360→    }
+   361→  }
+   362→
+   363→  // Mark notifications as read
+   364→  const handleMarkAllRead = async () => {
+   365→    try {
+   366→      await fetch('/api/notifications', {
+   367→        method: 'PATCH',
+   368→        headers: { 'Content-Type': 'application/json' },
+   369→        body: JSON.stringify({ markAll: true }),
+   370→      })
+   371→      await loadNotifications()
+   372→    } catch (e) {
+   373→      console.error(e)
+   374→    }
+   375→  }
+   376→
+   377→  // Save preferences
+   378→  const handleSavePreferences = async () => {
+   379→    setLoading('preferences')
+   380→    try {
+   381→      const res = await fetch('/api/preferences', {
+   382→        method: 'POST',
+   383→        headers: { 'Content-Type': 'application/json' },
+   384→        body: JSON.stringify(preferences),
+   385→      })
+   386→      if (res.ok) {
+   387→        toast({ title: 'Preferences Saved!', description: 'Your job search preferences have been updated' })
+   388→      }
+   389→    } catch (e) {
+   390→      toast({ title: 'Error', description: 'Failed to save preferences', variant: 'destructive' })
+   391→    } finally {
+   392→      setLoading(null)
+   393→    }
+   394→  }
+   395→
+   396→  const unreadCount = notifications.filter(n => !n.read).length
+   397→
+   398→  const statusColors: Record<string, string> = {
+   399→    saved: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+   400→    applied: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+   401→    interviewing: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+   402→    offered: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+   403→    rejected: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+   404→  }
+   405→
+   406→  const filteredApplications = applicationFilter === 'all'
+   407→    ? savedJobs
+   408→    : savedJobs.filter(j => j.status === applicationFilter)
+   409→
+   410→  const getMatchColor = (score: number | null) => {
+   411→    if (!score) return 'text-muted-foreground'
+   412→    if (score >= 80) return 'text-green-600'
+   413→    if (score >= 60) return 'text-amber-600'
+   414→    return 'text-red-500'
+   415→  }
+   416→
+   417→  return (
+   418→    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+   419→      {/* Header */}
+   420→      <header className="sticky top-0 z-50 border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+   421→        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+   422→          <div className="flex items-center gap-3">
+   423→            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+   424→              <Briefcase className="w-5 h-5 text-white" />
+   425→            </div>
+   426→            <div>
+   427→              <h1 className="text-lg font-bold tracking-tight">JobHunter AI</h1>
+   428→              <p className="text-xs text-muted-foreground hidden sm:block">Smart Job Search for Data Professionals</p>
+   429→            </div>
+   430→          </div>
+   431→          <div className="flex items-center gap-3">
+   432→            <Button
+   433→              variant="ghost"
+   434→              size="icon"
+   435→              className="relative"
+   436→              onClick={() => { setShowNotifications(!showNotifications); handleMarkAllRead() }}
+   437→            >
+   438→              <Bell className="w-5 h-5" />
+   439→              {unreadCount > 0 && (
+   440→                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center font-bold">
+   441→                  {unreadCount}
+   442→                </span>
+   443→              )}
+   444→            </Button>
+   445→          </div>
+   446→        </div>
+   447→
+   448→        {/* Notifications dropdown */}
+   449→        {showNotifications && (
+   450→          <div className="absolute right-4 top-16 w-80 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border rounded-xl shadow-xl z-50">
+   451→            <div className="p-3 border-b flex items-center justify-between">
+   452→              <span className="font-semibold text-sm">Notifications</span>
+   453→              <Button variant="ghost" size="sm" onClick={handleMarkAllRead}>
+   454→                Mark all read
+   455→              </Button>
+   456→            </div>
+   457→            {notifications.length === 0 ? (
+   458→              <div className="p-6 text-center text-sm text-muted-foreground">No notifications yet</div>
+   459→            ) : (
+   460→              notifications.slice(0, 10).map(n => (
+   461→                <div key={n.id} className={`p-3 border-b last:border-0 text-sm ${!n.read ? 'bg-emerald-50 dark:bg-emerald-950/30' : ''}`}>
+   462→                  <p className="font-medium">{n.title}</p>
+   463→                  <p className="text-muted-foreground text-xs mt-1">{n.message}</p>
+   464→                  <p className="text-xs text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString()}</p>
+   465→                </div>
+   466→              ))
+   467→            )}
+   468→          </div>
+   469→        )}
+   470→      </header>
+   471→
+   472→      {/* Main Content */}
+   473→      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6">
+   474→        <Tabs value={activeTab} onValueChange={setActiveTab}>
+   475→          <TabsList className="grid w-full grid-cols-4 mb-6">
+   476→            <TabsTrigger value="resume" className="gap-2">
+   477→              <FileText className="w-4 h-4 hidden sm:block" />
+   478→              <span>Resume</span>
+   479→            </TabsTrigger>
+   480→            <TabsTrigger value="jobs" className="gap-2">
+   481→              <Search className="w-4 h-4 hidden sm:block" />
+   482→              <span>Find Jobs</span>
+   483→            </TabsTrigger>
+   484→            <TabsTrigger value="applications" className="gap-2">
+   485→              <Bookmark className="w-4 h-4 hidden sm:block" />
+   486→              <span>Applications</span>
+   487→            </TabsTrigger>
+   488→            <TabsTrigger value="settings" className="gap-2">
+   489→              <Settings className="w-4 h-4 hidden sm:block" />
+   490→              <span>Settings</span>
+   491→            </TabsTrigger>
+   492→          </TabsList>
+   493→
+   494→          {/* ========= RESUME TAB ========= */}
+   495→          <TabsContent value="resume">
+   496→            <div className="grid lg:grid-cols-2 gap-6">
+   497→              {/* Resume Input */}
+   498→              <Card>
+   499→                <CardHeader>
+   500→                  <CardTitle className="flex items-center gap-2">
+   501→                    <Upload className="w-5 h-5 text-emerald-600" />
+   502→                    Your Resume
+   503→                  </CardTitle>
+   504→                  <CardDescription>
+   505→                    Paste your resume text below. Our AI will extract your skills, experience, and education to match you with the best jobs.
+   506→                  </CardDescription>
+   507→                </CardHeader>
+   508→                <CardContent>
+   509→                  <Textarea
+   510→                    placeholder="Paste your resume text here... Include your work experience, skills, education, and any relevant projects or certifications."
+   511→                    className="min-h-[300px] font-mono text-sm"
+   512→                    value={resumeText}
+   513→                    onChange={e => setResumeText(e.target.value)}
+   514→                  />
+   515→                </CardContent>
+   516→                <CardFooter>
+   517→                  <Button
+   518→                    onClick={handleParseResume}
+   519→                    disabled={loading === 'parsing'}
+   520→                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
+   521→                  >
+   522→                    {loading === 'parsing' ? (
+   523→                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Analyzing Resume...</>
+   524→                    ) : (
+   525→                      <><Sparkles className="w-4 h-4 mr-2" />Parse with AI</>
+   526→                    )}
+   527→                  </Button>
+   528→                </CardFooter>
+   529→              </Card>
+   530→
+   531→              {/* Parsed Profile */}
+   532→              <div className="space-y-4">
+   533→                {profile ? (
+   534→                  <>
+   535→                    {/* Profile Summary */}
+   536→                    <Card>
+   537→                      <CardHeader className="pb-3">
+   538→                        <CardTitle className="text-base flex items-center gap-2">
+   539→                          <FileBadge className="w-4 h-4 text-emerald-600" />
+   540→                          Profile Summary
+   541→                        </CardTitle>
+   542→                      </CardHeader>
+   543→                      <CardContent className="space-y-3">
+   544→                        {profile.name && <p className="font-semibold text-lg">{profile.name}</p>}
+   545→                        {profile.title && <p className="text-sm text-muted-foreground">{profile.title}</p>}
+   546→                        {profile.email && <p className="text-sm text-muted-foreground">{profile.email}</p>}
+   547→                        {profile.summary && <p className="text-sm mt-2">{profile.summary}</p>}
+   548→                      </CardContent>
+   549→                    </Card>
+   550→
+   551→                    {/* Skills */}
+   552→                    {profile.skills && profile.skills.length > 0 && (
+   553→                      <Card>
+   554→                        <CardHeader className="pb-3">
+   555→                          <CardTitle className="text-base flex items-center gap-2">
+   556→                            <Sparkles className="w-4 h-4 text-emerald-600" />
+   557→                            Extracted Skills ({profile.skills.length})
+   558→                          </CardTitle>
+   559→                        </CardHeader>
+   560→                        <CardContent>
+   561→                          <div className="flex flex-wrap gap-2">
+   562→                            {profile.skills.map((skill, i) => (
+   563→                              <Badge key={i} variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 hover:bg-emerald-100">
+   564→                                {skill}
+   565→                              </Badge>
+   566→                            ))}
+   567→                          </div>
+   568→                        </CardContent>
+   569→                      </Card>
+   570→                    )}
+   571→
+   572→                    {/* Experience */}
+   573→                    {profile.experience && profile.experience.length > 0 && (
+   574→                      <Card>
+   575→                        <CardHeader className="pb-3">
+   576→                          <CardTitle className="text-base flex items-center gap-2">
+   577→                            <Building2 className="w-4 h-4 text-emerald-600" />
+   578→                            Experience
+   579→                          </CardTitle>
+   580→                        </CardHeader>
+   581→                        <CardContent className="space-y-3">
+   582→                          {profile.experience.map((exp, i) => (
+   583→                            <div key={i} className="border-l-2 border-emerald-200 dark:border-emerald-800 pl-3">
+   584→                              <p className="font-medium text-sm">{exp.title}</p>
+   585→                              <p className="text-sm text-muted-foreground">{exp.company}</p>
+   586→                              <p className="text-xs text-muted-foreground">{exp.duration}</p>
+   587→                            </div>
+   588→                          ))}
+   589→                        </CardContent>
+   590→                      </Card>
+   591→                    )}
+   592→
+   593→                    {/* Education */}
+   594→                    {profile.education && profile.education.length > 0 && (
+   595→                      <Card>
+   596→                        <CardHeader className="pb-3">
+   597→                          <CardTitle className="text-base flex items-center gap-2">
+   598→                            <GraduationCap className="w-4 h-4 text-emerald-600" />
+   599→                            Education
+   600→                          </CardTitle>
+   601→                        </CardHeader>
+   602→                        <CardContent className="space-y-2">
+   603→                          {profile.education.map((edu, i) => (
+   604→                            <div key={i}>
+   605→                              <p className="font-medium text-sm">{edu.degree}</p>
+   606→                              <p className="text-sm text-muted-foreground">{edu.school} {edu.year && `— ${edu.year}`}</p>
+   607→                            </div>
+   608→                          ))}
+   609→                        </CardContent>
+   610→                      </Card>
+   611→                    )}
+   612→                  </>
+   613→                ) : (
+   614→                  <Card className="flex flex-col items-center justify-center min-h-[300px] text-center p-8">
+   615→                    <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-4">
+   616→                      <FileText className="w-8 h-8 text-emerald-500" />
+   617→                    </div>
+   618→                    <h3 className="font-semibold text-lg mb-2">No Resume Parsed Yet</h3>
+   619→                    <p className="text-sm text-muted-foreground max-w-sm">
+   620→                      Paste your resume text on the left and click &quot;Parse with AI&quot; to extract your skills, experience, and education automatically.
+   621→                    </p>
+   622→                  </Card>
+   623→                )}
+   624→              </div>
+   625→            </div>
+   626→          </TabsContent>
+   627→
+   628→          {/* ========= FIND JOBS TAB ========= */}
+   629→          <TabsContent value="jobs">
+   630→            <div className="space-y-6">
+   631→              {/* Search Form */}
+   632→              <Card>
+   633→                <CardHeader className="pb-4">
+   634→                  <CardTitle className="flex items-center gap-2">
+   635→                    <Search className="w-5 h-5 text-emerald-600" />
+   636→                    Search Jobs
+   637→                  </CardTitle>
+   638→                  <CardDescription>
+   639→                    Find Data Analytics & Data Science roles that match your profile
+   640→                  </CardDescription>
+   641→                </CardHeader>
+   642→                <CardContent>
+   643→                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   644→                    <div className="sm:col-span-2 lg:col-span-1">
+   645→                      <Label htmlFor="query">Keywords</Label>
+   646→                      <Input
+   647→                        id="query"
+   648→                        placeholder="data analyst, data scientist..."
+   649→                        value={searchQuery}
+   650→                        onChange={e => setSearchQuery(e.target.value)}
+   651→                      />
+   652→                    </div>
+   653→                    <div>
+   654→                      <Label htmlFor="location">Location</Label>
+   655→                      <Input
+   656→                        id="location"
+   657→                        placeholder="Lagos, Remote..."
+   658→                        value={searchLocation}
+   659→                        onChange={e => setSearchLocation(e.target.value)}
+   660→                      />
+   661→                    </div>
+   662→                    <div>
+   663→                      <Label htmlFor="jobType">Job Type</Label>
+   664→                      <Select value={searchJobType} onValueChange={setSearchJobType}>
+   665→                        <SelectTrigger id="jobType">
+   666→                          <SelectValue placeholder="Any type" />
+   667→                        </SelectTrigger>
+   668→                        <SelectContent>
+   669→                          <SelectItem value="">Any type</SelectItem>
+   670→                          <SelectItem value="full-time">Full-time</SelectItem>
+   671→                          <SelectItem value="part-time">Part-time</SelectItem>
+   672→                          <SelectItem value="contract">Contract</SelectItem>
+   673→                          <SelectItem value="remote">Remote</SelectItem>
+   674→                          <SelectItem value="hybrid">Hybrid</SelectItem>
+   675→                        </SelectContent>
+   676→                      </Select>
+   677→                    </div>
+   678→                    <div className="flex items-end">
+   679→                      <Button
+   680→                        onClick={handleSearchJobs}
+   681→                        disabled={loading === 'searching'}
+   682→                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
+   683→                      >
+   684→                        {loading === 'searching' ? (
+   685→                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Searching...</>
+   686→                        ) : (
+   687→                          <><Search className="w-4 h-4 mr-2" />Search</>
+   688→                        )}
+   689→                      </Button>
+   690→                    </div>
+   691→                  </div>
+   692→                </CardContent>
+   693→              </Card>
+   694→
+   695→              {/* Search Results */}
+   696→              {searchResults.length > 0 && (
+   697→                <div className="space-y-3">
+   698→                  <div className="flex items-center justify-between">
+   699→                    <h3 className="font-semibold text-lg">{searchResults.length} Jobs Found</h3>
+   700→                  </div>
+   701→                  <div className="space-y-3">
+   702→                    {searchResults.map((job, i) => {
+   703→                      const jobKey = `${job.title}-${job.company}`
+   704→                      const isSaved = savedJobIds.has(jobKey)
+   705→                      return (
+   706→                        <Card key={i} className="hover:shadow-md transition-shadow">
+   707→                          <CardContent className="p-4 sm:p-5">
+   708→                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+   709→                              <div className="flex-1 min-w-0">
+   710→                                <div className="flex items-start gap-2">
+   711→                                  <h4 className="font-semibold text-base leading-tight">{job.title}</h4>
+   712→                                  {job.matchScore && (
+   713→                                    <Badge className={`shrink-0 ${getMatchColor(job.matchScore)}`} variant="outline">
+   714→                                      {Math.round(job.matchScore)}% match
+   715→                                    </Badge>
+   716→                                  )}
+   717→                                </div>
+   718→                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
+   719→                                  {job.company && (
+   720→                                    <span className="flex items-center gap-1">
+   721→                                      <Building2 className="w-3.5 h-3.5" />
+   722→                                      {job.company}
+   723→                                    </span>
+   724→                                  )}
+   725→                                  {job.location && (
+   726→                                    <span className="flex items-center gap-1">
+   727→                                      <MapPin className="w-3.5 h-3.5" />
+   728→                                      {job.location}
+   729→                                    </span>
+   730→                                  )}
+   731→                                  {job.salary && (
+   732→                                    <span className="flex items-center gap-1">
+   733→                                      <DollarSign className="w-3.5 h-3.5" />
+   734→                                      {job.salary}
+   735→                                    </span>
+   736→                                  )}
+   737→                                  {job.jobType && (
+   738→                                    <span className="flex items-center gap-1">
+   739→                                      <Clock className="w-3.5 h-3.5" />
+   740→                                      {job.jobType}
+   741→                                    </span>
+   742→                                  )}
+   743→                                  {job.source && (
+   744→                                    <Badge variant="outline" className="text-xs">{job.source}</Badge>
+   745→                                  )}
+   746→                                </div>
+   747→                                {job.description && (
+   748→                                  <p className="text-sm mt-2 line-clamp-2">{job.description}</p>
+   749→                                )}
+   750→                              </div>
+   751→                              <div className="flex items-center gap-2 shrink-0">
+   752→                                {job.url && (
+   753→                                  <Button variant="outline" size="sm" asChild>
+   754→                                    <a href={job.url} target="_blank" rel="noopener noreferrer">
+   755→                                      <ExternalLink className="w-4 h-4 mr-1" />View
+   756→                                    </a>
+   757→                                  </Button>
+   758→                                )}
+   759→                                <Button
+   760→                                  variant={isSaved ? 'secondary' : 'default'}
+   761→                                  size="sm"
+   762→                                  disabled={isSaved}
+   763→                                  onClick={() => handleSaveJob(job)}
+   764→                                  className={!isSaved ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+   765→                                >
+   766→                                  <Bookmark className="w-4 h-4 mr-1" />
+   767→                                  {isSaved ? 'Saved' : 'Save'}
+   768→                                </Button>
+   769→                              </div>
+   770→                            </div>
+   771→                          </CardContent>
+   772→                        </Card>
+   773→                      )
+   774→                    })}
+   775→                  </div>
+   776→                </div>
+   777→              )}
+   778→
+   779→              {searchResults.length === 0 && loading !== 'searching' && (
+   780→                <Card className="flex flex-col items-center justify-center min-h-[250px] text-center p-8">
+   781→                  <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-4">
+   782→                    <Search className="w-8 h-8 text-emerald-500" />
+   783→                  </div>
+   784→                  <h3 className="font-semibold text-lg mb-2">Search for Jobs</h3>
+   785→                  <p className="text-sm text-muted-foreground max-w-sm">
+   786→                    Enter keywords, location, and job type above to find Data Analytics & Data Science roles that match your skills.
+   787→                  </p>
+   788→                </Card>
+   789→              )}
+   790→            </div>
+   791→          </TabsContent>
+   792→
+   793→          {/* ========= APPLICATIONS TAB ========= */}
+   794→          <TabsContent value="applications">
+   795→            <div className="space-y-6">
+   796→              {/* Stats */}
+   797→              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+   798→                {[
+   799→                  { label: 'Total Saved', count: savedJobs.length, color: 'bg-slate-100 dark:bg-slate-800' },
+   800→                  { label: 'Applied', count: savedJobs.filter(j => j.status === 'applied').length, color: 'bg-blue-50 dark:bg-blue-950' },
+   801→                  { label: 'Interviewing', count: savedJobs.filter(j => j.status === 'interviewing').length, color: 'bg-amber-50 dark:bg-amber-950' },
+   802→                  { label: 'Offered', count: savedJobs.filter(j => j.status === 'offered').length, color: 'bg-green-50 dark:bg-green-950' },
+   803→                  { label: 'Rejected', count: savedJobs.filter(j => j.status === 'rejected').length, color: 'bg-red-50 dark:bg-red-950' },
+   804→                ].map(stat => (
+   805→                  <Card key={stat.label} className={`${stat.color}`}>
+   806→                    <CardContent className="p-4 text-center">
+   807→                      <p className="text-2xl font-bold">{stat.count}</p>
+   808→                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+   809→                    </CardContent>
+   810→                  </Card>
+   811→                ))}
+   812→              </div>
+   813→
+   814→              {/* Filter */}
+   815→              <div className="flex items-center gap-2 flex-wrap">
+   816→                <Filter className="w-4 h-4 text-muted-foreground" />
+   817→                {['all', 'saved', 'applied', 'interviewing', 'offered', 'rejected'].map(status => (
+   818→                  <Button
+   819→                    key={status}
+   820→                    variant={applicationFilter === status ? 'default' : 'outline'}
+   821→                    size="sm"
+   822→                    onClick={() => setApplicationFilter(status)}
+   823→                    className={applicationFilter === status ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+   824→                  >
+   825→                    {status.charAt(0).toUpperCase() + status.slice(1)}
+   826→                  </Button>
+   827→                ))}
+   828→              </div>
+   829→
+   830→              {/* Job List */}
+   831→              {filteredApplications.length > 0 ? (
+   832→                <div className="space-y-3">
+   833→                  {filteredApplications.map(job => (
+   834→                    <Card key={job.id} className="hover:shadow-md transition-shadow">
+   835→                      <CardContent className="p-4 sm:p-5">
+   836→                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+   837→                          <div className="flex-1 min-w-0">
+   838→                            <div className="flex items-start gap-2 flex-wrap">
+   839→                              <h4 className="font-semibold text-base">{job.title}</h4>
+   840→                              <Badge className={statusColors[job.status] || ''}>{job.status}</Badge>
+   841→                              {job.matchScore && (
+   842→                                <Badge variant="outline" className={getMatchColor(job.matchScore)}>
+   843→                                  {Math.round(job.matchScore)}%
+   844→                                </Badge>
+   845→                              )}
+   846→                            </div>
+   847→                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
+   848→                              <span className="flex items-center gap-1">
+   849→                                <Building2 className="w-3.5 h-3.5" />
+   850→                                {job.company}
+   851→                              </span>
+   852→                              {job.location && (
+   853→                                <span className="flex items-center gap-1">
+   854→                                  <MapPin className="w-3.5 h-3.5" />
+   855→                                  {job.location}
+   856→                                </span>
+   857→                              )}
+   858→                              {job.salary && (
+   859→                                <span className="flex items-center gap-1">
+   860→                                  <DollarSign className="w-3.5 h-3.5" />
+   861→                                  {job.salary}
+   862→                                </span>
+   863→                              )}
+   864→                              {job.appliedDate && (
+   865→                                <span className="flex items-center gap-1">
+   866→                                  Applied: {new Date(job.appliedDate).toLocaleDateString()}
+   867→                                </span>
+   868→                              )}
+   869→                            </div>
+   870→                            {job.coverLetter && (
+   871→                              <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+   872→                                <FileText className="w-3 h-3" />Cover letter generated
+   873→                              </p>
+   874→                            )}
+   875→                          </div>
+   876→                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+   877→                            <Select onValueChange={val => handleUpdateStatus(job.id, val)}>
+   878→                              <SelectTrigger className="w-[130px] h-9">
+   879→                                <SelectValue placeholder="Update status" />
+   880→                              </SelectTrigger>
+   881→                              <SelectContent>
+   882→                                <SelectItem value="saved">Saved</SelectItem>
+   883→                                <SelectItem value="applied">Applied</SelectItem>
+   884→                                <SelectItem value="interviewing">Interviewing</SelectItem>
+   885→                                <SelectItem value="offered">Offered</SelectItem>
+   886→                                <SelectItem value="rejected">Rejected</SelectItem>
+   887→                              </SelectContent>
+   888→                            </Select>
+   889→                            <Button variant="outline" size="sm" onClick={() => handleGenerateCoverLetter(job)}>
+   890→                              <Sparkles className="w-4 h-4 mr-1" />Cover Letter
+   891→                            </Button>
+   892→                            <Button variant="outline" size="sm" onClick={() => { setSelectedJob(job); setShowJobDetail(true) }}>
+   893→                              View
+   894→                            </Button>
+   895→                            <Button variant="ghost" size="sm" onClick={() => handleDeleteJob(job.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+   896→                              <Trash2 className="w-4 h-4" />
+   897→                            </Button>
+   898→                          </div>
+   899→                        </div>
+   900→                      </CardContent>
+   901→                    </Card>
+   902→                  ))}
+   903→                </div>
+   904→              ) : (
+   905→                <Card className="flex flex-col items-center justify-center min-h-[250px] text-center p-8">
+   906→                  <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-4">
+   907→                    <Bookmark className="w-8 h-8 text-emerald-500" />
+   908→                  </div>
+   909→                  <h3 className="font-semibold text-lg mb-2">No Saved Jobs Yet</h3>
+   910→                  <p className="text-sm text-muted-foreground max-w-sm">
+   911→                    Search for jobs and save the ones that interest you. They&apos;ll appear here so you can track your applications.
+   912→                  </p>
+   913→                  <Button variant="outline" className="mt-4" onClick={() => setActiveTab('jobs')}>
+   914→                    <Search className="w-4 h-4 mr-2" />Search for Jobs
+   915→                  </Button>
+   916→                </Card>
+   917→              )}
+   918→            </div>
+   919→          </TabsContent>
+   920→
+   921→          {/* ========= SETTINGS TAB ========= */}
+   922→          <TabsContent value="settings">
+   923→            <div className="grid lg:grid-cols-2 gap-6">
+   924→              <Card>
+   925→                <CardHeader>
+   926→                  <CardTitle className="flex items-center gap-2">
+   927→                    <Briefcase className="w-5 h-5 text-emerald-600" />
+   928→                    Job Search Preferences
+   929→                  </CardTitle>
+   930→                  <CardDescription>
+   931→                    Configure what kind of jobs you&apos;re looking for. These preferences will be used to find better matches.
+   932→                  </CardDescription>
+   933→                </CardHeader>
+   934→                <CardContent className="space-y-4">
+   935→                  <div>
+   936→                    <Label>Job Titles (comma-separated)</Label>
+   937→                    <Input
+   938→                      placeholder="Data Analyst, Data Scientist, Business Analyst..."
+   939→                      value={preferences.jobTitles.join(', ')}
+   940→                      onChange={e => setPreferences({
+   941→                        ...preferences,
+   942→                        jobTitles: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+   943→                      })}
+   944→                    />
+   945→                  </div>
+   946→                  <div>
+   947→                    <Label>Preferred Locations (comma-separated)</Label>
+   948→                    <Input
+   949→                      placeholder="Lagos, Abuja, Remote..."
+   950→                      value={preferences.locations.join(', ')}
+   951→                      onChange={e => setPreferences({
+   952→                        ...preferences,
+   953→                        locations: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+   954→                      })}
+   955→                    />
+   956→                  </div>
+   957→                  <div>
+   958→                    <Label>Job Types (comma-separated)</Label>
+   959→                    <Input
+   960→                      placeholder="Full-time, Remote, Hybrid..."
+   961→                      value={preferences.jobTypes.join(', ')}
+   962→                      onChange={e => setPreferences({
+   963→                        ...preferences,
+   964→                        jobTypes: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+   965→                      })}
+   966→                    />
+   967→                  </div>
+   968→                  <div>
+   969→                    <Label>Minimum Salary</Label>
+   970→                    <Input
+   971→                      type="number"
+   972→                      placeholder="e.g. 50000"
+   973→                      value={preferences.salaryMin || ''}
+   974→                      onChange={e => setPreferences({
+   975→                        ...preferences,
+   976→                        salaryMin: e.target.value ? parseInt(e.target.value) : null
+   977→                      })}
+   978→                    />
+   979→                  </div>
+   980→                  <div className="flex items-center justify-between">
+   981→                    <Label htmlFor="remote">Remote Only</Label>
+   982→                    <Switch
+   983→                      id="remote"
+   984→                      checked={preferences.remoteOnly}
+   985→                      onCheckedChange={val => setPreferences({ ...preferences, remoteOnly: val })}
+   986→                    />
+   987→                  </div>
+   988→                </CardContent>
+   989→                <CardFooter>
+   990→                  <Button
+   991→                    onClick={handleSavePreferences}
+   992→                    disabled={loading === 'preferences'}
+   993→                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
+   994→                  >
+   995→                    {loading === 'preferences' ? (
+   996→                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+   997→                    ) : (
+   998→                      <>Save Preferences</>
+   999→                    )}
+  1000→                  </Button>
+  1001→                </CardFooter>
+  1002→              </Card>
+  1003→
+  1004→              {/* Quick Tips */}
+  1005→              <Card>
+  1006→                <CardHeader>
+  1007→                  <CardTitle className="flex items-center gap-2">
+  1008→                    <Sparkles className="w-5 h-5 text-emerald-600" />
+  1009→                    Tips for Better Results
+  1010→                  </CardTitle>
+  1011→                </CardHeader>
+  1012→                <CardContent className="space-y-4">
+  1013→                  <div className="space-y-3">
+  1014→                    <div className="flex gap-3">
+  1015→                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+  1016→                        <span className="text-sm font-bold text-emerald-600">1</span>
+  1017→                      </div>
+  1018→                      <div>
+  1019→                        <p className="font-medium text-sm">Upload a Detailed Resume</p>
+  1020→                        <p className="text-xs text-muted-foreground">The more detail in your resume, the better our AI can match you with relevant positions. Include specific tools, technologies, and quantifiable achievements.</p>
+  1021→                      </div>
+  1022→                    </div>
+  1023→                    <div className="flex gap-3">
+  1024→                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+  1025→                        <span className="text-sm font-bold text-emerald-600">2</span>
+  1026→                      </div>
+  1027→                      <div>
+  1028→                        <p className="font-medium text-sm">Use Specific Keywords</p>
+  1029→                        <p className="text-xs text-muted-foreground">Search with specific terms like &quot;SQL Data Analyst&quot; or &quot;Machine Learning Engineer&quot; rather than just &quot;data&quot; for more targeted results.</p>
+  1030→                      </div>
+  1031→                    </div>
+  1032→                    <div className="flex gap-3">
+  1033→                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+  1034→                        <span className="text-sm font-bold text-emerald-600">3</span>
+  1035→                      </div>
+  1036→                      <div>
+  1037→                        <p className="font-medium text-sm">Generate Tailored Cover Letters</p>
+  1038→                        <p className="text-xs text-muted-foreground">Use our AI cover letter generator for each application. A customized cover letter significantly increases your response rate from employers.</p>
+  1039→                      </div>
+  1040→                    </div>
+  1041→                    <div className="flex gap-3">
+  1042→                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+  1043→                        <span className="text-sm font-bold text-emerald-600">4</span>
+  1044→                      </div>
+  1045→                      <div>
+  1046→                        <p className="font-medium text-sm">Track Your Applications</p>
+  1047→                        <p className="text-xs text-muted-foreground">Keep your application statuses updated. Tracking helps you follow up on time and stay organized throughout your job search process.</p>
+  1048→                      </div>
+  1049→                    </div>
+  1050→                    <div className="flex gap-3">
+  1051→                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+  1052→                        <span className="text-sm font-bold text-emerald-600">5</span>
+  1053→                      </div>
+  1054→                      <div>
+  1055→                        <p className="font-medium text-sm">Set Clear Preferences</p>
+  1056→                        <p className="text-xs text-muted-foreground">Configure your job titles, locations, and salary expectations to filter out irrelevant listings and focus on the opportunities that matter most to you.</p>
+  1057→                      </div>
+  1058→                    </div>
+  1059→                  </div>
+  1060→                </CardContent>
+  1061→              </Card>
+  1062→            </div>
+  1063→          </TabsContent>
+  1064→        </Tabs>
+  1065→      </main>
+  1066→
+  1067→      {/* Cover Letter Dialog */}
+  1068→      <Dialog open={showCoverLetter} onOpenChange={setShowCoverLetter}>
+  1069→        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+  1070→          <DialogHeader>
+  1071→            <DialogTitle className="flex items-center gap-2">
+  1072→              <Sparkles className="w-5 h-5 text-emerald-600" />
+  1073→              AI Cover Letter
+  1074→            </DialogTitle>
+  1075→            <DialogDescription>
+  1076→              {coverLetterJob ? `Cover letter for ${coverLetterJob.title} at ${coverLetterJob.company}` : 'Generating...'}
+  1077→            </DialogDescription>
+  1078→          </DialogHeader>
+  1079→          {loading === 'coverLetter' ? (
+  1080→            <div className="flex flex-col items-center justify-center py-12">
+  1081→              <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mb-4" />
+  1082→              <p className="text-sm text-muted-foreground">AI is crafting your personalized cover letter...</p>
+  1083→            </div>
+  1084→          ) : generatedCoverLetter ? (
+  1085→            <div className="space-y-4">
+  1086→              <Textarea
+  1087→                className="min-h-[300px] text-sm"
+  1088→                value={generatedCoverLetter}
+  1089→                onChange={e => setGeneratedCoverLetter(e.target.value)}
+  1090→              />
+  1091→              <div className="flex gap-2">
+  1092→                <Button
+  1093→                  variant="outline"
+  1094→                  onClick={() => {
+  1095→                    navigator.clipboard.writeText(generatedCoverLetter)
+  1096→                    toast({ title: 'Copied!', description: 'Cover letter copied to clipboard' })
+  1097→                  }}
+  1098→                >
+  1099→                  Copy to Clipboard
+  1100→                </Button>
+  1101→                {coverLetterJob?.url && (
+  1102→                  <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white">
+  1103→                    <a href={coverLetterJob.url} target="_blank" rel="noopener noreferrer">
+  1104→                      <ExternalLink className="w-4 h-4 mr-1" />Open Job Application
+  1105→                    </a>
+  1106→                  </Button>
+  1107→                )}
+  1108→              </div>
+  1109→            </div>
+  1110→          ) : null}
+  1111→        </DialogContent>
+  1112→      </Dialog>
+  1113→
+  1114→      {/* Job Detail Dialog */}
+  1115→      <Dialog open={showJobDetail} onOpenChange={setShowJobDetail}>
+  1116→        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+  1117→          <DialogHeader>
+  1118→            <DialogTitle>{selectedJob?.title}</DialogTitle>
+  1119→            <DialogDescription>
+  1120→              {selectedJob?.company} {selectedJob?.location && `— ${selectedJob.location}`}
+  1121→            </DialogDescription>
+  1122→          </DialogHeader>
+  1123→          {selectedJob && (
+  1124→            <div className="space-y-4">
+  1125→              <div className="flex flex-wrap gap-2">
+  1126→                {selectedJob.matchScore && (
+  1127→                  <Badge className={getMatchColor(selectedJob.matchScore)}>
+  1128→                    {Math.round(selectedJob.matchScore)}% Match
+  1129→                  </Badge>
+  1130→                )}
+  1131→                <Badge className={statusColors[selectedJob.status]}>{selectedJob.status}</Badge>
+  1132→                {selectedJob.jobType && <Badge variant="outline">{selectedJob.jobType}</Badge>}
+  1133→                {selectedJob.salary && <Badge variant="outline">{selectedJob.salary}</Badge>}
+  1134→              </div>
+  1135→              {selectedJob.description && (
+  1136→                <div>
+  1137→                  <h4 className="font-semibold text-sm mb-2">Description</h4>
+  1138→                  <p className="text-sm whitespace-pre-wrap">{selectedJob.description}</p>
+  1139→                </div>
+  1140→              )}
+  1141→              {selectedJob.coverLetter && (
+  1142→                <div>
+  1143→                  <h4 className="font-semibold text-sm mb-2">Cover Letter</h4>
+  1144→                  <p className="text-sm whitespace-pre-wrap bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">{selectedJob.coverLetter}</p>
+  1145→                </div>
+  1146→              )}
+  1147→              {selectedJob.notes && (
+  1148→                <div>
+  1149→                  <h4 className="font-semibold text-sm mb-2">Notes</h4>
+  1150→                  <p className="text-sm whitespace-pre-wrap">{selectedJob.notes}</p>
+  1151→                </div>
+  1152→              )}
+  1153→              <div className="flex gap-2 pt-2">
+  1154→                {selectedJob.url && (
+  1155→                  <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white">
+  1156→                    <a href={selectedJob.url} target="_blank" rel="noopener noreferrer">
+  1157→                      <ExternalLink className="w-4 h-4 mr-1" />View Original Listing
+  1158→                    </a>
+  1159→                  </Button>
+  1160→                )}
+  1161→                <Button variant="outline" onClick={() => { handleGenerateCoverLetter(selectedJob); setShowJobDetail(false) }}>
+  1162→                  <Sparkles className="w-4 h-4 mr-1" />Generate Cover Letter
+  1163→                </Button>
+  1164→              </div>
+  1165→            </div>
+  1166→          )}
+  1167→        </DialogContent>
+  1168→      </Dialog>
+  1169→
+  1170→      {/* Footer */}
+  1171→      <footer className="border-t bg-white/50 dark:bg-slate-900/50 py-4 mt-auto">
+  1172→        <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center text-sm text-muted-foreground">
+  1173→          JobHunter AI — Smart Job Search for Data Professionals
+  1174→        </div>
+  1175→      </footer>
+  1176→    </div>
+  1177→  )
+  1178→}
+  1179→

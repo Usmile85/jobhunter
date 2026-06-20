@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id            String   @id @default(cuid())
+  resumeText    String?
+  extractedSkills String?  // JSON array of skill strings
+  experience    String?  // JSON array of experience objects
+  education     String?  // JSON array of education objects
+  name          String?
+  email         String?
+  title         String?
+  summary       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model JobPreference {
+  id          String   @id @default(cuid())
+  jobTitles   String   // JSON array of job titles to search
+  locations   String?  // JSON array of preferred locations
+  remoteOnly  Boolean  @default(false)
+  salaryMin   Int?
+  jobTypes    String?  // JSON array: full-time, part-time, contract, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SavedJob {
+  id            String   @id @default(cuid())
+  title         String
+  company       String
+  location      String?
+  description   String?
+  url           String?
+  source        String?  // linkedin, indeed, etc.
+  salary        String?
+  jobType       String?
+  matchScore    Float?   // 0-100 match score
+  postedDate    String?
+  status        String   @default("saved") // saved, applied, interviewing, rejected, offered
+  notes         String?
+  coverLetter   String?
+  appliedDate   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("info") // info, match, application, alert
+  read      Boolean  @default(false)
+  jobId     String?  // optional link to a SavedJob
+  createdAt DateTime @default(now())
+}
