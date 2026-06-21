@@ -1,4 +1,4 @@
-import { zaiChatJSON, zaiWebSearch } from '@/lib/z-ai';
+import { aiChatJSON, aiWebSearch } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface JobResult {
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const num = numResults || 10;
 
     // Step 1: Web search
-    const searchResults = await zaiWebSearch(searchQuery, num);
+    const searchResults = await aiWebSearch(searchQuery, num);
 
     if (!searchResults || searchResults.length === 0) {
       return NextResponse.json({ jobs: [] });
@@ -73,7 +73,7 @@ IMPORTANT: Return ONLY a valid JSON array. No markdown, no explanations.`;
 
     let jobs: JobResult[];
     try {
-      jobs = await zaiChatJSON<JobResult[]>(userPrompt, systemPrompt);
+      jobs = await aiChatJSON<JobResult[]>(userPrompt, systemPrompt);
     } catch {
       // If AI parsing fails, create basic jobs from search results directly
       jobs = searchResults.map(r => ({

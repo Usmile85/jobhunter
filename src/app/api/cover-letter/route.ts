@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { zaiChat } from '@/lib/z-ai';
+import { aiChat } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/cover-letter - Generate a cover letter using z-ai
@@ -29,7 +29,7 @@ ${resumeText}
 
 Write a complete, professional cover letter ready to send.`;
 
-    const coverLetter = await zaiChat(userPrompt, systemPrompt);
+    const coverLetter = await aiChat(userPrompt, systemPrompt);
 
     // Save the cover letter to the SavedJob record if jobId is provided
     if (jobId) {

@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { zaiChatJSON } from '@/lib/z-ai';
+import { aiChatJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface ParsedResume {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     const userPrompt = `Parse the following resume and extract structured information:\n\n${resumeText}`;
 
-    const parsed = await zaiChatJSON<ParsedResume>(userPrompt, systemPrompt);
+    const parsed = await aiChatJSON<ParsedResume>(userPrompt, systemPrompt);
 
     // Save extracted data to Profile table
     const existing = await db.profile.findFirst();
