@@ -24,9 +24,9 @@ export interface SearchResult {
 const useOpenAI = !!process.env.OPENAI_API_KEY;
 const useZAI = !!process.env.ZAI_BASE_URL && !process.env.OPENAI_API_KEY;
 
-const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'llama-3.1-8b-instant';
 const SERPER_API_KEY = process.env.SERPER_API_KEY || '';
 
 // ─── ZAI SDK helpers (local Space-Z dev) ────────────────────────────────────
