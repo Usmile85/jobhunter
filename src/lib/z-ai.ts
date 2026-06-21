@@ -2,7 +2,6 @@ import ZAI from 'z-ai-web-dev-sdk';
 
 /**
  * Build ZAI config from environment variables.
- * Falls back to defaults that work on the z-ai platform.
  * On Vercel, these must be set in Settings > Environment Variables.
  */
 function buildConfig() {
@@ -17,14 +16,14 @@ function buildConfig() {
 
 /**
  * Lazy-initialised ZAI SDK instance.
- * Bypasses ZAI.create() (which reads from filesystem) and uses new ZAI(config)
- * directly with environment variables. This works on Vercel's read-only filesystem.
+ * Uses a type-safe workaround to bypass the private constructor
+ * (ZAI.create() reads from filesystem which fails on Vercel).
  */
-let _zai: ZAI | null = null;
+let _zai: InstanceType<typeof ZAI> | null = null;
 
-function getZAI(): ZAI {
+function getZAI(): InstanceType<typeof ZAI> {
   if (!_zai) {
-    _zai = new ZAI(buildConfig());
+    _zai = (ZAI as unknown as { new (config: ReturnType<typeof buildConfig>): InstanceType<typeof ZAI> })(buildConfig());
   }
   return _zai;
 }
