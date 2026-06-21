@@ -1,4 +1,35 @@
 import ZAI from 'z-ai-web-dev-sdk';
+import { writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+
+/**
+ * Ensure a .z-ai-config file exists in the project root.
+ * The z-ai SDK reads from {cwd}/.z-ai-config first, then ~/.z-ai-config, then /etc/.z-ai-config.
+ * On platforms like Vercel, we support both a checked-in config file AND environment variables.
+ * Environment variables take priority if set.
+ */
+function ensureConfigFile(): void {
+  const configPath = join(process.cwd(), '.z-ai-config');
+
+  // If config file already exists, no need to regenerate
+  if (existsSync(configPath)) {
+    return;
+  }
+
+  // Build config from environment variables (for Vercel / CI / etc.)
+  const config: Record<string, string> = {};
+
+  if (process.env.ZAI_BASE_URL) config.baseUrl = process.env.ZAI_BASE_URL;
+  if (process.env.ZAI_API_KEY) config.apiKey = process.env.ZAI_API_KEY;
+  if (process.env.ZAI_CHAT_ID) config.chatId = process.env.ZAI_CHAT_ID;
+  if (process.env.ZAI_USER_ID) config.userId = process.env.ZAI_USER_ID;
+  if (process.env.ZAI_TOKEN) config.token = process.env.ZAI_TOKEN;
+
+  // Only write if we have at least the required fields
+  if (config.baseUrl && config.apiKey) {
+    writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+  }
+}
 
 /**
  * Lazy-initialised ZAI SDK instance.
@@ -8,6 +39,7 @@ let _zai: ZAI | null = null;
 
 async function getZAI(): Promise<ZAI> {
   if (!_zai) {
+    ensureConfigFile();
     _zai = await ZAI.create();
   }
   return _zai;

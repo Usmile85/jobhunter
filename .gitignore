@@ -64,3 +64,5 @@ worklog.md
 
 # Skills directory
 /skills/
+# z-ai SDK config (contains API credentials)
+.z-ai-config
